@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:myapp/employee_model.dart';
+import 'package:myapp/grade_model.dart';
 import 'package:myapp/grade_data.dart';
 import 'package:myapp/penalty_model.dart';
 import 'package:myapp/thanks_book_model.dart';
@@ -12,6 +13,7 @@ class EmployeeProvider with ChangeNotifier {
   static const _employeesKey = 'employees_key';
 
   List<Employee> get employees => _employees;
+  List<Grade> get grades => gradesData; // Expose grades for mapping
 
   EmployeeProvider() {
     _loadEmployees();
@@ -40,6 +42,13 @@ class EmployeeProvider with ChangeNotifier {
     notifyListeners();
   }
 
+    void addMultipleEmployees(List<Employee> newEmployees) {
+    _employees.addAll(newEmployees);
+    _saveEmployees();
+    notifyListeners();
+  }
+
+
   void updateEmployee(Employee updatedEmployee) {
     final index = _employees.indexWhere((emp) => emp.id == updatedEmployee.id);
     if (index != -1) {
@@ -52,6 +61,12 @@ class EmployeeProvider with ChangeNotifier {
   void deleteEmployee(String employeeId) {
     _employees.removeWhere((emp) => emp.id == employeeId);
     _saveEmployees();
+    notifyListeners();
+  }
+
+  Future<void> clearAllData() async {
+    _employees = [];
+    await _saveEmployees();
     notifyListeners();
   }
 

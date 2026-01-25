@@ -260,7 +260,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                   title: Text(currentEmployee.name),
                   centerTitle: true,
                   pinned: true,
-                  floating: true,
+                  floating: false, // Changed to false for a more standard pinned behavior
                   actions: [
                     IconButton(
                       icon: const Icon(Icons.edit),
@@ -307,27 +307,11 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     );
   }
 
-  Widget _buildTabWithInfo(
-      {required BuildContext context,
-      required Employee employee,
-      required List<Widget> children}) {
-    return CustomScrollView(
-      slivers: <Widget>[
-        SliverToBoxAdapter(
-          child: _buildBasicInfoCard(context, employee),
-        ),
-        SliverList(
-          delegate: SliverChildListDelegate(children),
-        ),
-      ],
-    );
-  }
-
   Widget _buildRaiseTab(BuildContext context, Employee currentEmployee) {
-    return _buildTabWithInfo(
-      context: context,
-      employee: currentEmployee,
+    return ListView(
+      padding: EdgeInsets.zero, // Remove default padding
       children: [
+         _buildBasicInfoCard(context, currentEmployee),
         _buildRaiseSection(context, currentEmployee),
         const SizedBox(height: 16),
         _buildThanksBooksCard(
@@ -337,16 +321,17 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
             currentEmployee.id,
             false),
         const SizedBox(height: 16),
-        _buildPenaltiesCard(context, currentEmployee), // <-- Moved to the bottom
+        _buildPenaltiesCard(context, currentEmployee),
+         const SizedBox(height: 80), // Add padding to the bottom
       ],
     );
   }
 
   Widget _buildPromotionTab(BuildContext context, Employee currentEmployee) {
-    return _buildTabWithInfo(
-      context: context,
-      employee: currentEmployee,
+    return ListView(
+      padding: EdgeInsets.zero, // Remove default padding
       children: [
+        _buildBasicInfoCard(context, currentEmployee),
         _buildPromotionSection(context, currentEmployee),
         const SizedBox(height: 16),
         _buildThanksBooksCard(
@@ -355,6 +340,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
             currentEmployee.thanksBooks.where((b) => b.isApplied).toList(),
             currentEmployee.id,
             true),
+        const SizedBox(height: 80), // Add padding to the bottom
       ],
     );
   }
