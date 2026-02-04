@@ -27,28 +27,39 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   late DateTime _lastPromotionDate;
   late DateTime _effectiveLastRaiseDate;
   late TextEditingController _raisesReceivedController;
+  late List<TextEditingController> _additionalInfoControllers;
 
   bool get _isEditing => widget.existingEmployee != null;
 
   @override
   void initState() {
     super.initState();
+    _additionalInfoControllers = [];
     if (_isEditing) {
       final emp = widget.existingEmployee!;
       _nameController = TextEditingController(text: emp.name);
       _jobTitleController = TextEditingController(text: emp.jobTitle);
       _educationController = TextEditingController(text: emp.education);
-      _currentSalaryController = TextEditingController(text: emp.currentSalary.toString());
-      _selectedGrade = gradesData.firstWhere((g) => g.id == emp.grade.id, orElse: () => gradesData.last);
+      _currentSalaryController =
+          TextEditingController(text: emp.currentSalary.toString());
+      _selectedGrade = gradesData.firstWhere((g) => g.id == emp.grade.id,
+          orElse: () => gradesData.last);
       _lastPromotionDate = emp.lastPromotionDate;
       _effectiveLastRaiseDate = emp.effectiveLastRaiseDate;
-      _raisesReceivedController = TextEditingController(text: emp.raisesReceived.toString());
+      _raisesReceivedController =
+          TextEditingController(text: emp.raisesReceived.toString());
+      if (emp.additionalInfo.isNotEmpty) {
+        for (var info in emp.additionalInfo) {
+          _additionalInfoControllers.add(TextEditingController(text: info));
+        }
+      }
     } else {
       _nameController = TextEditingController();
       _jobTitleController = TextEditingController();
       _educationController = TextEditingController();
       _selectedGrade = gradesData.last; // Default to the last (lowest) grade
-      _currentSalaryController = TextEditingController(text: _selectedGrade.baseSalary.toString());
+      _currentSalaryController =
+          TextEditingController(text: _selectedGrade.baseSalary.toString());
       final now = DateTime.now();
       _lastPromotionDate = now;
       _effectiveLastRaiseDate = now;
@@ -63,11 +74,15 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     _educationController.dispose();
     _currentSalaryController.dispose();
     _raisesReceivedController.dispose();
+    for (var controller in _additionalInfoControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _selectDate(BuildContext context, {required String field}) async {
-    final initialDate = field == 'promotion' ? _lastPromotionDate : _effectiveLastRaiseDate;
+    final initialDate =
+        field == 'promotion' ? _lastPromotionDate : _effectiveLastRaiseDate;
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -88,12 +103,31 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     }
   }
 
+  void _addAdditionalInfoField() {
+    setState(() {
+      _additionalInfoControllers.add(TextEditingController());
+    });
+  }
+
+  void _removeAdditionalInfoField(int index) {
+    setState(() {
+      _additionalInfoControllers[index].dispose();
+      _additionalInfoControllers.removeAt(index);
+    });
+  }
+
   void _saveForm() {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      final effectiveDate = _isEditing && (int.tryParse(_raisesReceivedController.text) ?? 0) == 0
-          ? _lastPromotionDate
-          : _effectiveLastRaiseDate;
+      final effectiveDate =
+          _isEditing && (int.tryParse(_raisesReceivedController.text) ?? 0) == 0
+              ? _lastPromotionDate
+              : _effectiveLastRaiseDate;
+
+      final additionalInfo = _additionalInfoControllers
+          .map((controller) => controller.text)
+          .where((text) => text.isNotEmpty)
+          .toList();
 
       final employee = Employee(
         id: _isEditing ? widget.existingEmployee!.id : const Uuid().v4(),
@@ -101,12 +135,14 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
         jobTitle: _jobTitleController.text,
         education: _educationController.text,
         grade: _selectedGrade,
-        currentSalary: int.tryParse(_currentSalaryController.text) ?? _selectedGrade.baseSalary,
-        startDate: _lastPromotionDate, 
+        currentSalary: int.tryParse(_currentSalaryController.text) ??
+            _selectedGrade.baseSalary,
+        startDate: _lastPromotionDate,
         lastPromotionDate: _lastPromotionDate,
         effectiveLastRaiseDate: effectiveDate,
         raisesReceived: int.tryParse(_raisesReceivedController.text) ?? 0,
         thanksBooks: _isEditing ? widget.existingEmployee!.thanksBooks : [],
+        additionalInfo: additionalInfo,
       );
 
       final provider = Provider.of<EmployeeProvider>(context, listen: false);
@@ -136,61 +172,84 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
               children: <Widget>[
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'اسم الموظف', border: OutlineInputBorder()),
-                  validator: (value) => (value == null || value.isEmpty) ? 'يرجى إدخال اسم الموظف' : null,
+                  decoration: const InputDecoration(
+                      labelText: 'اسم الموظف', border: OutlineInputBorder()),
+                  validator: (value) =>
+                      (value == null || value.isEmpty) ? 'يرجى إدخال اسم الموظف' : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _jobTitleController,
-                  decoration: const InputDecoration(labelText: 'العنوان الوظيفي', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'العنوان الوظيفي', border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _educationController,
-                  decoration: const InputDecoration(labelText: 'التحصيل الدراسي', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'التحصيل الدراسي',
+                      border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<Grade>(
-                  initialValue: _selectedGrade, // Use initialValue instead of value
-                  decoration: const InputDecoration(labelText: 'الدرجة الوظيفية', border: OutlineInputBorder()),
+                  initialValue: _selectedGrade,
+                  decoration: const InputDecoration(
+                      labelText: 'الدرجة الوظيفية',
+                      border: OutlineInputBorder()),
                   items: gradesData.map<DropdownMenuItem<Grade>>((Grade grade) {
-                    return DropdownMenuItem<Grade>(value: grade, child: Text(grade.title));
+                    return DropdownMenuItem<Grade>(
+                        value: grade, child: Text(grade.title));
                   }).toList(),
                   onChanged: (Grade? newValue) {
                     setState(() {
                       _selectedGrade = newValue!;
                       if (!_isEditing) {
-                        _currentSalaryController.text = _selectedGrade.baseSalary.toString();
+                        _currentSalaryController.text =
+                            _selectedGrade.baseSalary.toString();
                       }
                     });
                   },
-                  validator: (value) => value == null ? 'يرجى اختيار درجة' : null,
+                  validator: (value) =>
+                      value == null ? 'يرجى اختيار درجة' : null,
                 ),
                 const SizedBox(height: 16),
-                 TextFormField(
+                TextFormField(
                   controller: _currentSalaryController,
-                  readOnly: !_isEditing, // Make it read-only for new employees
+                  readOnly: !_isEditing,
                   decoration: InputDecoration(
                     labelText: 'الراتب الإجمالي الحالي',
                     border: const OutlineInputBorder(),
-                    fillColor: !_isEditing ? Theme.of(context).colorScheme.surfaceContainerHighest : null, // Use surfaceContainerHighest
+                    fillColor: !_isEditing
+                        ? Theme.of(context).colorScheme.surfaceContainerHighest
+                        : null,
                     filled: !_isEditing,
                   ),
                   keyboardType: TextInputType.number,
-                  validator: (value) => (value == null || value.isEmpty || int.tryParse(value) == null) ? 'يرجى إدخال رقم صحيح' : null,
+                  validator: (value) => (value == null ||
+                          value.isEmpty ||
+                          int.tryParse(value) == null)
+                      ? 'يرجى إدخال رقم صحيح'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _raisesReceivedController,
-                  decoration: const InputDecoration(labelText: 'عدد العلاوات المستلمة', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'عدد العلاوات المستلمة',
+                      border: OutlineInputBorder()),
                   keyboardType: TextInputType.number,
-                  validator: (value) => (value == null || value.isEmpty || int.tryParse(value) == null) ? 'يرجى إدخال عدد صحيح' : null,
+                  validator: (value) => (value == null ||
+                          value.isEmpty ||
+                          int.tryParse(value) == null)
+                      ? 'يرجى إدخال عدد صحيح'
+                      : null,
                 ),
                 const SizedBox(height: 24),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('تاريخ آخر ترفيع'),
-                  subtitle: Text(DateFormat('yyyy-MM-dd').format(_lastPromotionDate)),
+                  subtitle:
+                      Text(DateFormat('yyyy-MM-dd').format(_lastPromotionDate)),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () => _selectDate(context, field: 'promotion'),
                 ),
@@ -198,13 +257,47 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('تاريخ آخر علاوة فعلي'),
-                  subtitle: Text(DateFormat('yyyy-MM-dd').format(_effectiveLastRaiseDate)),
+                  subtitle: Text(
+                      DateFormat('yyyy-MM-dd').format(_effectiveLastRaiseDate)),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () => _selectDate(context, field: 'effective'),
                 ),
+                const SizedBox(height: 24),
+                const Text('معلومات إضافية',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ..._additionalInfoControllers.asMap().entries.map((entry) {
+                  int index = entry.key;
+                  TextEditingController controller = entry.value;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: controller,
+                            decoration: InputDecoration(
+                              labelText: 'معلومة إضافية ${index + 1}',
+                              border: const OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: () => _removeAdditionalInfoField(index),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                TextButton.icon(
+                  icon: const Icon(Icons.add),
+                  label: const Text('إضافة معلومة جديدة'),
+                  onPressed: _addAdditionalInfoField,
+                ),
                 const SizedBox(height: 32),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                  style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16)),
                   onPressed: _saveForm,
                   child: Text(_isEditing ? 'حفظ التغييرات' : 'إضافة الموظف'),
                 ),

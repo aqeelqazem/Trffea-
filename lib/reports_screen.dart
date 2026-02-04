@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:myapp/employee_model.dart';
+import 'package:myapp/grade_employees_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:myapp/reports_provider.dart';
 
@@ -12,14 +12,14 @@ class ReportsScreen extends StatefulWidget {
   State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
-class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProviderStateMixin {
+class _ReportsScreenState extends State<ReportsScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    // Initialize filter for the first time.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ReportsProvider>(context, listen: false).setMonthFilter(0);
     });
@@ -53,7 +53,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
             children: [
               _buildReportTab(provider, 'raise'),
               _buildReportTab(provider, 'promotion'),
-              _buildStatsList(provider),
+              _buildStatsTab(provider),
             ],
           );
         },
@@ -62,17 +62,29 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
   }
 
   Widget _buildReportTab(ReportsProvider provider, String type) {
-    final List<Employee> employees = type == 'raise' ? provider.raiseFilteredEmployees : provider.promotionFilteredEmployees;
+    final List<Employee> employees = type == 'raise'
+        ? provider.raiseFilteredEmployees
+        : provider.promotionFilteredEmployees;
     final int count = employees.length;
     final String title = type == 'raise' ? 'علاوة' : 'ترقية';
     final List<String> months = [
-      'كل السنة', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+      'كل السنة',
+      'يناير',
+      'فبراير',
+      'مارس',
+      'أبريل',
+      'مايو',
+      'يونيو',
+      'يوليو',
+      'أغسطس',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر',
     ];
 
     return Column(
       children: [
-        // This is the new counter display
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
@@ -92,7 +104,6 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
             ),
           ),
         ),
-        // The existing dropdown
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: DropdownButtonFormField<int>(
@@ -115,36 +126,57 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
           ),
         ),
         const SizedBox(height: 16),
-        // The list of employees
         Expanded(
           child: employees.isEmpty
-              ? const Center(child: Text('لا يوجد موظفون مستحقون في هذه الفترة.'))
-              : ListView.builder(
-                  itemCount: employees.length,
-                  itemBuilder: (context, index) {
-                    final employee = employees[index];
-                    final date = type == 'raise'
-                        ? provider.calculateNextRaiseDate(employee)
-                        : provider.calculateNextPromotionDate(employee);
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          child: Icon(type == 'raise' ? Icons.card_giftcard : Icons.star),
-                        ),
-                        title: Text(employee.name),
-                        subtitle: Text('تاريخ الاستحقاق: ${date != null ? DateFormat('yyyy-MM-dd').format(date) : 'غير محدد'}'),
-                      ),
-                    );
-                  },
-                ),
+              ? const Center(
+                  child: Text('لا يوجد موظفون مستحقون في هذه الفترة.'),
+                )
+              : _buildEmployeesCardList(employees, type, provider),
         ),
       ],
     );
   }
 
-  Widget _buildStatsList(ReportsProvider provider) {
+  Widget _buildEmployeesCardList(
+    List<Employee> employees,
+    String type,
+    ReportsProvider provider,
+  ) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      itemCount: employees.length,
+      itemBuilder: (context, index) {
+        final employee = employees[index];
+        final date = type == 'raise'
+            ? provider.calculateNextRaiseDate(employee)
+            : provider.calculateNextPromotionDate(employee);
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 6.0),
+          child: ListTile(
+            leading: CircleAvatar(
+              child: Icon(type == 'raise' ? Icons.card_giftcard : Icons.star),
+            ),
+            title: Text(
+              employee.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('الدرجة: ${employee.grade.title}'),
+                Text(
+                  'تاريخ الاستحقاق: ${date != null ? DateFormat('yyyy-MM-dd').format(date) : 'غير محدد'}',
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatsTab(ReportsProvider provider) {
     final gradeDistribution = provider.gradeDistribution;
     if (gradeDistribution.isEmpty) {
       return const Center(child: Text('لا توجد بيانات لعرض الإحصائيات.'));
@@ -158,20 +190,58 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       itemCount: sortedGrades.length,
       itemBuilder: (context, index) {
         final entry = sortedGrades[index];
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: const Icon(Icons.group, color: Colors.white),
-            ),
-            title: Text('الدرجة: ${entry.key}', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            trailing: Chip(
-              label: Text(
-                entry.value.toString(),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        return InkWell(
+          onTap: () {
+            final employeesInGrade = provider.getEmployeesByGrade(entry.key);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => GradeEmployeesScreen(
+                  gradeTitle: entry.key,
+                  employees: employeesInGrade,
+                ),
               ),
-              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            );
+          },
+          child: Card(
+            elevation: 2,
+            margin: const EdgeInsets.symmetric(vertical: 8.0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Wrap(
+                spacing: 16.0,
+                runSpacing: 8.0,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.bar_chart,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        'الدرجة: ${entry.key}',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ],
+                  ),
+                  Chip(
+                    label: Text(
+                      'العدد: ${entry.value}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.secondaryContainer,
+                  ),
+                ],
+              ),
             ),
           ),
         );

@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:myapp/employee_details_screen.dart';
 import 'package:myapp/employee_model.dart';
-import 'package:myapp/employee_provider.dart';
 import 'package:myapp/notifications_provider.dart';
-import 'package:myapp/report_generator.dart';
 import 'package:provider/provider.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -44,59 +42,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           appBar: AppBar(
             title: const Text('التنبيهات'),
             centerTitle: true,
-            actions: [
-              // This is the new Export button
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.share_outlined),
-                tooltip: 'تصدير التقارير',
-                onSelected: (value) {
-                  final allEmployeesForRaise =
-                      provider.dueRaises + provider.upcomingRaises;
-                  final allEmployeesForPromotion =
-                      provider.duePromotions + provider.upcomingPromotions;
-                  final allGrades = context.read<EmployeeProvider>().grades;
-
-                  if (value == 'export_raises') {
-                    if (allEmployeesForRaise.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('لا يوجد موظفين لتصديرهم في تقرير العلاوات.')),
-                      );
-                    } else {
-                      ReportGenerator.generateRaiseReport(
-                          context, allEmployeesForRaise);
-                    }
-                  } else if (value == 'export_promotions') {
-                    if (allEmployeesForPromotion.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'لا يوجد موظفين لتصديرهم في تقرير الترفيعات.')),
-                      );
-                    } else {
-                      ReportGenerator.generatePromotionReport(
-                          context, allEmployeesForPromotion, allGrades);
-                    }
-                  }
-                },
-                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  const PopupMenuItem<String>(
-                    value: 'export_raises',
-                    child: ListTile(
-                      leading: Icon(Icons.card_giftcard),
-                      title: Text('تصدير تقرير العلاوات'),
-                    ),
-                  ),
-                  const PopupMenuItem<String>(
-                    value: 'export_promotions',
-                    child: ListTile(
-                      leading: Icon(Icons.star),
-                      title: Text('تصدير تقرير الترفيعات'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            // The Export button has been removed from the actions
+            actions: const [], // Removed the PopupMenuButton
             bottom: TabBar(
               controller: _tabController,
               tabs: [

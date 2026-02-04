@@ -5,6 +5,7 @@ import 'package:myapp/employee_provider.dart';
 import 'package:myapp/grade_model.dart';
 import 'package:provider/provider.dart';
 
+// 1. Added "معلومة إضافية" to the list of options.
 const List<String> _targetEmployeeFields = [
   'اسم الموظف',
   'العنوان الوظيفي',
@@ -14,6 +15,7 @@ const List<String> _targetEmployeeFields = [
   'تاريخ آخر علاوة فعلي',
   'عدد العلاوات المستلمة',
   'الدرجة الوظيفية',
+  'معلومة إضافية', // The new option for additional info
   'تجاهل هذا العمود',
 ];
 
@@ -42,11 +44,21 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
     for (int i = 0; i < headers.length; i++) {
       String bestMatch = 'تجاهل هذا العمود';
+      // Prioritize direct matches before contains
       for (String field in _targetEmployeeFields) {
-        if (headers[i].contains(field.toLowerCase())) {
+        if (headers[i] == field.toLowerCase()) {
           bestMatch = field;
           break;
         }
+      }
+       // If no direct match, try partial match
+      if (bestMatch == 'تجاهل هذا العمود') {
+         for (String field in _targetEmployeeFields) {
+           if (field != 'تجاهل هذا العمود' && headers[i].contains(field.toLowerCase())) {
+             bestMatch = field;
+             break;
+           }
+         }
       }
       _columnMappings[i] = bestMatch;
     }
@@ -84,33 +96,50 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     for (final row in dataRows) {
       rowNumber++;
       final employeeData = <String, dynamic>{};
+      final additionalInfo = <String>[];
+
+      // 2. Correctly process mappings based on user selection.
       for (final entry in _columnMappings.entries) {
         final columnIndex = entry.key;
         final targetField = entry.value;
-        if (targetField != 'تجاهل هذا العمود' && columnIndex < row.length) {
-          employeeData[targetField] = row[columnIndex];
+
+        if (columnIndex >= row.length) continue; // Skip if row is shorter than expected.
+        
+        final cellValue = row[columnIndex];
+
+        if (targetField == 'معلومة إضافية') {
+          if (cellValue != null && cellValue.toString().trim().isNotEmpty) {
+            additionalInfo.add(cellValue.toString().trim());
+          }
+        } else if (targetField != 'تجاهل هذا العمود') {
+          employeeData[targetField] = cellValue;
         }
+        // If the field is "تجاهل هذا العمود", we explicitly do nothing.
       }
 
       try {
-        final gradeValue = employeeData['الدرجة الوظيفية']?.toString().trim();
-        if (gradeValue == null || gradeValue.isEmpty) {
-          _showErrorDialog('خطأ في الاستيراد', 'قيمة الدرجة الوظيفية فارغة في الصف رقم $rowNumber. يرجى إصلاح البيانات والمحاولة مرة أخرى.');
-          return;
+        final nameValue = employeeData['اسم الموظف']?.toString().trim();
+        if (nameValue == null || nameValue.isEmpty) {
+           _showErrorDialog('خطأ في الاستيراد', 'قيمة "اسم الموظف" فارغة في الصف رقم $rowNumber. هذا الحقل إجباري.');
+           return;
         }
 
+        final gradeValue = employeeData['الدرجة الوظيفية']?.toString().trim();
+        if (gradeValue == null || gradeValue.isEmpty) {
+          _showErrorDialog('خطأ في الاستيراد', 'قيمة "الدرجة الوظيفية" فارغة في الصف رقم $rowNumber. هذا الحقل إجباري.');
+          return;
+        }
+        
         Grade? grade;
         final int? gradeId = int.tryParse(gradeValue);
 
         if (gradeId != null) {
-          // It's a number, try to find by ID
           try {
             grade = allGrades.firstWhere((g) => g.id == gradeId);
           } catch (e) {
             grade = null;
           }
         } else {
-          // It's a string, try to find by title
           try {
             grade = allGrades.firstWhere((g) => g.title == gradeValue);
           } catch (e) {
@@ -119,21 +148,21 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
         }
 
         if (grade == null) {
-          // If still null after both checks, throw the error
           throw StateError('Grade not found');
         }
 
         final employee = Employee(
           id: DateTime.now().millisecondsSinceEpoch.toString() + row.hashCode.toString(),
-          name: employeeData['اسم الموظف']?.toString().trim() ?? 'اسم غير متوفر',
+          name: nameValue,
           jobTitle: employeeData['العنوان الوظيفي']?.toString().trim() ?? '',
           education: employeeData['التحصيل الدراسي']?.toString().trim() ?? '',
           grade: grade,
           lastPromotionDate: _parseDate(employeeData['تاريخ آخر ترفيع']) ?? DateTime.now(),
-          effectiveLastRaiseDate: _parseDate(employeeData['تاريخ آخر علاوة فعلي']) ?? DateTime.now(),
+          effectiveLastRaiseDate: _parseDate(employeeData['تاريخ آخر علاوة فعلي']) ?? _parseDate(employeeData['تاريخ آخر ترفيع']) ?? DateTime.now(),
           raisesReceived: _parseInt(employeeData['عدد العلاوات المستلمة']),
           currentSalary: _parseDouble(employeeData['الراتب الحالي']).toInt(),
-          startDate: DateTime.now(),
+          startDate: DateTime.now(), // Consider making this configurable
+          additionalInfo: additionalInfo, // Assign the correctly gathered info
         );
         newEmployees.add(employee);
 
@@ -163,11 +192,14 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
   DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
     if (value is DateTime) return value;
-    final double? excelDate = double.tryParse(value.toString());
-    if (excelDate != null) {
-      return DateTime.fromMillisecondsSinceEpoch(((excelDate - 25569) * 86400000).toInt());
+    final String stringValue = value.toString().trim();
+    if (stringValue.isEmpty) return null;
+
+    final double? excelDate = double.tryParse(stringValue);
+     if (excelDate != null && excelDate > 40000 && excelDate < 50000) { // Simple check for Excel serial date
+      return DateTime.fromMicrosecondsSinceEpoch(((excelDate - 25569) * 86400000 * 1000).toInt(), isUtc: true);
     }
-    return DateTime.tryParse(value.toString());
+    return DateTime.tryParse(stringValue);
   }
 
   int _parseInt(dynamic value) {
@@ -201,7 +233,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                         title: const Text('كيفية ربط الأعمدة'),
                         content: const SingleChildScrollView(
                           child: Text(
-                              'لكل عمود من ملفك المصدر، اختر الحقل المناسب له في التطبيق من القائمة المنسدلة.\n\n- **اسم الموظف:** حقل إجباري.\n- **الدرجة الوظيفية:** يجب أن تطابق إحدى الدرجات المعرفة في التطبيق (مثال: الدرجة الأولى).\n- **التواريخ:** يجب أن تكون بصيغة (YYYY-MM-DD).\n- **الأرقام:** سيتم تحويلها تلقائيًا.\n- **تجاهل هذا العمود:** لاستثناء الحقل من عملية الاستيراد.'),
+                              'لكل عمود من ملفك المصدر، اختر الحقل المناسب له في التطبيق من القائمة المنسدلة.\n\n- **اسم الموظف والدرجة الوظيفية:** حقول إجبارية.\n- **معلومة إضافية:** اختر هذا الخيار للأعمدة التي تحتوي على بيانات تريد إضافتها كمعلومات إضافية للموظف.\n- **تجاهل هذا العمود:** لاستثناء الحقل من عملية الاستيراد بالكامل.'),
                         ),
                         actions: [
                           TextButton(
@@ -231,32 +263,27 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                           'عمود ${index + 1}: ${headers[index]}',
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        if (sampleData.length > index)
+                        if (sampleData.length > index && sampleData[index].toString().isNotEmpty)
                           Text(
                             'مثال: "${sampleData[index]}"',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                           ),
                         const SizedBox(height: 10),
-                        FormField<String>(
+                        DropdownButtonFormField<String>(
                           initialValue: _columnMappings[index],
-                          builder: (FormFieldState<String> state) {
-                            return DropdownButton<String>(
-                              value: state.value,
-                              items: _targetEmployeeFields.map((field) {
-                                return DropdownMenuItem(
-                                  value: field,
-                                  child: Text(field),
-                                );
-                              }).toList(),
-                              onChanged: (newValue) {
-                                setState(() {
-                                  _columnMappings[index] = newValue!;
-                                  state.didChange(newValue);
-                                });
-                              },
-                              isExpanded: true,
+                          items: _targetEmployeeFields.map((field) {
+                            return DropdownMenuItem(
+                              value: field,
+                              child: Text(field),
                             );
+                          }).toList(),
+                          onChanged: (newValue) {
+                            setState(() {
+                              _columnMappings[index] = newValue!;
+                            });
                           },
+                          isExpanded: true,
+                           decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                         ),
                       ],
                     ),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:myapp/employee_model.dart';
 import 'package:myapp/penalty_model.dart';
 import 'package:myapp/thanks_book_model.dart';
+import 'package:myapp/total_salary_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -20,8 +21,7 @@ class EmployeeDetailsScreen extends StatefulWidget {
   State<EmployeeDetailsScreen> createState() => _EmployeeDetailsScreenState();
 }
 
-class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
-    with TickerProviderStateMixin {
+class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> with TickerProviderStateMixin {
   late final TabController _tabController;
 
   @override
@@ -36,10 +36,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     super.dispose();
   }
 
-  // --- Calculation Logic with Penalties ---
-
   int _calculateTotalPenaltyMonths(Employee emp) {
-    // Sums up the delay months from all penalties that haven't been 'consumed' by a promotion yet.
     return emp.penalties
         .where((p) => !p.isConsumed)
         .fold(0, (sum, p) => sum + p.delayInMonths);
@@ -54,7 +51,6 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
 
     final raiseYearStartDate = emp.effectiveLastRaiseDate;
 
-    // Calculate deductions from thanks books
     final applicableBooks = emp.thanksBooks.where((book) {
       return !book.isApplied &&
           !book.bookDate.isBefore(raiseYearStartDate) &&
@@ -63,25 +59,17 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     final totalMonthsToDeduct =
         applicableBooks.fold<int>(0, (sum, book) => sum + book.monthsDeducted);
 
-    // Get total delay months from penalties
     final totalPenaltyMonths = _calculateTotalPenaltyMonths(emp);
 
-    // Apply deductions first, then add penalties
     var adjustedRaiseDate = baseRaiseDate;
-    for (int i = 0; i < totalMonthsToDeduct; i++) {
-      adjustedRaiseDate = DateTime(adjustedRaiseDate.year,
-          adjustedRaiseDate.month - 1, adjustedRaiseDate.day);
-    }
-    for (int i = 0; i < totalPenaltyMonths; i++) {
-      adjustedRaiseDate = DateTime(adjustedRaiseDate.year,
-          adjustedRaiseDate.month + 1, adjustedRaiseDate.day);
-    }
+    adjustedRaiseDate = DateTime(adjustedRaiseDate.year, adjustedRaiseDate.month - totalMonthsToDeduct, adjustedRaiseDate.day);
+    adjustedRaiseDate = DateTime(adjustedRaiseDate.year, adjustedRaiseDate.month + totalPenaltyMonths, adjustedRaiseDate.day);
 
     return adjustedRaiseDate;
   }
 
   DateTime? _calculateNextPromotionDate(Employee emp) {
-    if (emp.grade.raisesCount == null) return null; // Not promotable
+    if (emp.grade.raisesCount == null) return null;
 
     final basePromotionDate = DateTime(
       emp.lastPromotionDate.year + emp.grade.raisesCount!,
@@ -89,28 +77,17 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
       emp.lastPromotionDate.day,
     );
 
-    // Calculate total months deducted from ALL thanks books for promotion
     final totalThanksMonths =
         emp.thanksBooks.fold<int>(0, (sum, book) => sum + book.monthsDeducted);
 
-    // Get total delay months from penalties
     final totalPenaltyMonths = _calculateTotalPenaltyMonths(emp);
 
-    // Apply deductions first, then add penalties
     var adjustedPromotionDate = basePromotionDate;
-    for (int i = 0; i < totalThanksMonths; i++) {
-      adjustedPromotionDate = DateTime(adjustedPromotionDate.year,
-          adjustedPromotionDate.month - 1, adjustedPromotionDate.day);
-    }
-     for (int i = 0; i < totalPenaltyMonths; i++) {
-      adjustedPromotionDate = DateTime(adjustedPromotionDate.year,
-          adjustedPromotionDate.month + 1, adjustedPromotionDate.day);
-    }
+    adjustedPromotionDate = DateTime(adjustedPromotionDate.year, adjustedPromotionDate.month - totalThanksMonths, adjustedPromotionDate.day);
+    adjustedPromotionDate = DateTime(adjustedPromotionDate.year, adjustedPromotionDate.month + totalPenaltyMonths, adjustedPromotionDate.day);
 
     return adjustedPromotionDate;
   }
-
-  // --- Dialogs ---
 
   void _showConfirmationDialog(BuildContext context,
       {required String title,
@@ -185,29 +162,32 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                     decoration: const InputDecoration(labelText: 'ملاحظات'),
                   ),
                   const SizedBox(height: 20),
-                  // Simple Date Picker imitation
-                  Row(
-                    children: [
-                      const Text('تاريخ العقوبة:'),
-                      const Spacer(),
-                      Text(DateFormat('yyyy-MM-dd').format(selectedDate)),
-                      IconButton(
-                        icon: const Icon(Icons.calendar_today),
-                        onPressed: () async {
-                          final pickedDate = await showDatePicker(
-                            context: context,
-                            initialDate: selectedDate,
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime.now(),
-                          );
-                          if (pickedDate != null && pickedDate != selectedDate) {
-                             // This part is tricky in a dialog. A stateful builder is better.
-                             // For now, we just update the variable.
-                             selectedDate = pickedDate;
-                          }
-                        },
-                      ),
-                    ],
+                  StatefulBuilder(
+                      builder: (context, setDialogState) {
+                        return Row(
+                          children: [
+                            const Text('تاريخ العقوبة:'),
+                            const Spacer(),
+                            Text(DateFormat('yyyy-MM-dd').format(selectedDate)),
+                            IconButton(
+                              icon: const Icon(Icons.calendar_today),
+                              onPressed: () async {
+                                final pickedDate = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedDate,
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime.now(),
+                                );
+                                if (pickedDate != null && pickedDate != selectedDate) {
+                                  setDialogState(() {
+                                    selectedDate = pickedDate;
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+                        );
+                      }
                   ),
                 ],
               ),
@@ -240,9 +220,6 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     );
   }
 
-
-  // --- Build Methods ---
-
   @override
   Widget build(BuildContext context) {
     return Consumer<EmployeeProvider>(
@@ -260,10 +237,20 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                   title: Text(currentEmployee.name),
                   centerTitle: true,
                   pinned: true,
-                  floating: false, // Changed to false for a more standard pinned behavior
+                  floating: false,
                   actions: [
                     IconButton(
+                      icon: const Icon(Icons.calculate_outlined),
+                      tooltip: 'تفاصيل الراتب الكلي',
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => TotalSalaryScreen(employee: currentEmployee),
+                        ),
+                      ),
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.edit),
+                      tooltip: 'تعديل الموظف',
                       onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
                               builder: (_) => AddEmployeeScreen(
@@ -271,6 +258,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete),
+                      tooltip: 'حذف الموظف',
                       onPressed: () => _showConfirmationDialog(
                         context,
                         title: 'تأكيد الحذف',
@@ -309,10 +297,13 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
 
   Widget _buildRaiseTab(BuildContext context, Employee currentEmployee) {
     return ListView(
-      padding: EdgeInsets.zero, // Remove default padding
+      padding: const EdgeInsets.all(16.0),
       children: [
-         _buildBasicInfoCard(context, currentEmployee),
+        _buildBasicInfoCard(context, currentEmployee),
+        const SizedBox(height: 16),
         _buildRaiseSection(context, currentEmployee),
+        const SizedBox(height: 16),
+        _buildAdditionalInfoCard(context, currentEmployee),
         const SizedBox(height: 16),
         _buildThanksBooksCard(
             context,
@@ -322,16 +313,17 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
             false),
         const SizedBox(height: 16),
         _buildPenaltiesCard(context, currentEmployee),
-         const SizedBox(height: 80), // Add padding to the bottom
+        const SizedBox(height: 80), // Add padding to the bottom
       ],
     );
   }
 
   Widget _buildPromotionTab(BuildContext context, Employee currentEmployee) {
     return ListView(
-      padding: EdgeInsets.zero, // Remove default padding
+      padding: const EdgeInsets.all(16.0),
       children: [
         _buildBasicInfoCard(context, currentEmployee),
+        const SizedBox(height: 16),
         _buildPromotionSection(context, currentEmployee),
         const SizedBox(height: 16),
         _buildThanksBooksCard(
@@ -356,50 +348,51 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     }
     final raisesColor = inTasKeen ? Colors.red : null;
 
-    return Card(
-      margin: const EdgeInsets.all(12.0),
-      elevation: 4.0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            _buildDetailRow(context,
-                icon: Icons.badge,
-                title: 'العنوان الوظيفي',
-                value: currentEmployee.jobTitle),
-            _buildDetailRow(context,
-                icon: Icons.school,
-                title: 'التحصيل الدراسي',
-                value: currentEmployee.education),
-            _buildDetailRow(context,
-                icon: Icons.work,
-                title: 'الدرجة الوظيفية',
-                value: currentEmployee.grade.title),
-            _buildDetailRow(context,
-                icon: Icons.star,
-                title: 'تاريخ آخر ترفيع',
-                value: DateFormat('yyyy-MM-dd')
-                    .format(currentEmployee.lastPromotionDate)),
-            _buildDetailRow(context,
-                icon: Icons.event_available,
-                title: 'تاريخ آخر علاوة فعلي',
-                value: DateFormat('yyyy-MM-dd')
-                    .format(currentEmployee.effectiveLastRaiseDate)),
-            _buildDetailRow(context,
-                icon: Icons.format_list_numbered,
-                title: 'عدد العلاوات المستلمة',
-                value: '${currentEmployee.raisesReceived}',
-                valueColor: raisesColor),
-            const Divider(height: 20),
-            _buildDetailRow(context,
-                icon: Icons.account_balance_wallet,
-                title: 'الراتب الإجمالي الحالي',
-                value: '${currencyFormat.format(currentEmployee.currentSalary)} دينار',
-                isHeader: true),
-          ],
-        ),
-      ),
+    return _buildInfoCard(
+      context,
+      title: 'المعلومات الأساسية',
+      children: [
+         Padding(
+           padding: const EdgeInsets.all(8.0),
+           child: Column(
+            children: [
+              _buildDetailRow(context,
+                  icon: Icons.badge,
+                  title: 'العنوان الوظيفي',
+                  value: currentEmployee.jobTitle),
+              _buildDetailRow(context,
+                  icon: Icons.school,
+                  title: 'التحصيل الدراسي',
+                  value: currentEmployee.education),
+              _buildDetailRow(context,
+                  icon: Icons.work,
+                  title: 'الدرجة الوظيفية',
+                  value: currentEmployee.grade.title),
+              _buildDetailRow(context,
+                  icon: Icons.star,
+                  title: 'تاريخ آخر ترفيع',
+                  value: DateFormat('yyyy-MM-dd')
+                      .format(currentEmployee.lastPromotionDate)),
+              _buildDetailRow(context,
+                  icon: Icons.event_available,
+                  title: 'تاريخ آخر علاوة فعلي',
+                  value: DateFormat('yyyy-MM-dd')
+                      .format(currentEmployee.effectiveLastRaiseDate)),
+              _buildDetailRow(context,
+                  icon: Icons.format_list_numbered,
+                  title: 'عدد العلاوات المستلمة',
+                  value: '${currentEmployee.raisesReceived}',
+                  valueColor: raisesColor),
+              const Divider(height: 20),
+              _buildDetailRow(context,
+                  icon: Icons.account_balance_wallet,
+                  title: 'الراتب الاسمي الحالي',
+                  value: '${currencyFormat.format(currentEmployee.currentSalary)} دينار',
+                  isHeader: true),
+            ],
+           ),
+         ),
+      ]
     );
   }
 
@@ -408,15 +401,16 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     final isRaiseDue = !DateTime.now().isBefore(nextRaiseDate);
     final provider = Provider.of<EmployeeProvider>(context, listen: false);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: _buildInfoCard(context,
+    return _buildInfoCard(context,
           title: 'استحقاق العلاوة السنوية',
           children: [
-            _buildDetailRow(context,
-                icon: Icons.event,
-                title: 'موعد العلاوة القادمة',
-                value: DateFormat('yyyy-MM-dd').format(nextRaiseDate)),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: _buildDetailRow(context,
+                  icon: Icons.event,
+                  title: 'موعد العلاوة القادمة',
+                  value: DateFormat('yyyy-MM-dd').format(nextRaiseDate)),
+            ),
             const SizedBox(height: 16),
             Center(
               child: ElevatedButton.icon(
@@ -436,8 +430,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                         ),
               ),
             ),
-          ]),
-    );
+             const SizedBox(height: 8),
+          ]);
   }
 
   Widget _buildPromotionSection(
@@ -447,18 +441,19 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
         currentEmployee.raisesReceived >= currentEmployee.grade.raisesCount!;
     final provider = Provider.of<EmployeeProvider>(context, listen: false);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: nextPromotionDate != null
+    return nextPromotionDate != null
           ? _buildInfoCard(context,
               title: 'استحقاق الترفيع',
               children: [
-                  _buildDetailRow(context,
-                      icon: Icons.auto_awesome,
-                      title: 'موعد الترفيع المستحق',
-                      value:
-                          DateFormat('yyyy-MM-dd').format(nextPromotionDate),
-                      valueColor: isEligibleForPromotion ? Colors.green : null),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: _buildDetailRow(context,
+                        icon: Icons.auto_awesome,
+                        title: 'موعد الترفيع المستحق',
+                        value:
+                            DateFormat('yyyy-MM-dd').format(nextPromotionDate),
+                        valueColor: isEligibleForPromotion ? Colors.green : null),
+                  ),
                   const SizedBox(height: 16),
                   Center(
                     child: ElevatedButton.icon(
@@ -479,21 +474,44 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                               ),
                     ),
                   ),
+                   const SizedBox(height: 8),
                 ])
           : const Center(
               child: Padding(
               padding: EdgeInsets.all(32.0),
               child: Text("هذا الموظف في أعلى درجة وظيفية.",
                   style: TextStyle(fontSize: 16, color: Colors.grey)),
-            )),
-    );
+            ));
   }
 
-  // --- New Penalty Card Widget ---
+    Widget _buildAdditionalInfoCard(BuildContext context, Employee employee) {
+    return _buildInfoCard(
+        context,
+        title: 'معلومات إضافية',
+        children: [
+          if (employee.additionalInfo.isEmpty)
+            const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(child: Text('لا توجد معلومات إضافية مسجلة.')))
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: employee.additionalInfo.length,
+              itemBuilder: (context, index) {
+                final info = employee.additionalInfo[index];
+                return ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: Text(info),
+                );
+              },
+            )
+        ],
+      );
+  }
+
   Widget _buildPenaltiesCard(BuildContext context, Employee employee) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: _buildInfoCard(
+    return _buildInfoCard(
         context,
         title: 'العقوبات',
         children: [
@@ -539,15 +557,12 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
               },
             )
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildThanksBooksCard(BuildContext context, String title,
       List<ThanksBook> books, String employeeId, bool isArchived) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: _buildInfoCard(
+    return _buildInfoCard(
         context,
         title: title,
         children: [
@@ -630,8 +645,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
               },
             )
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildInfoCard(BuildContext context,
@@ -639,22 +653,21 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     return Card(
       elevation: 4.0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(color: Theme.of(context).colorScheme.primary)),
-            const Divider(thickness: 1.5),
-            const SizedBox(height: 10),
+             Padding(
+               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+               child: Text(title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(color: Theme.of(context).colorScheme.primary)),
+             ),
+            const Divider(thickness: 1.5, height: 1, indent: 16, endIndent: 16),
             ...children
           ],
         ),
-      ),
     );
   }
 
@@ -664,8 +677,9 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
       required String value,
       bool isHeader = false,
       Color? valueColor}) {
+    final textTheme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -673,14 +687,16 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
               color: Theme.of(context).colorScheme.secondary, size: 20),
           const SizedBox(width: 16),
           Expanded(
+              flex: 2,
               child: Text('$title: ',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  style: textTheme.bodyMedium?.copyWith(
                       fontWeight:
                           isHeader ? FontWeight.bold : FontWeight.normal))),
           Expanded(
+            flex: 3,
               child: Text(value,
                   textAlign: TextAlign.end,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  style: textTheme.bodyLarge?.copyWith(
                       fontWeight:
                           isHeader ? FontWeight.bold : FontWeight.normal,
                       color: valueColor ??

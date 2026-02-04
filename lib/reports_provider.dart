@@ -43,6 +43,12 @@ class ReportsProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  List<Employee> getEmployeesByGrade(String gradeTitle) {
+    return _employeeProvider.employees
+        .where((employee) => employee.grade.title == gradeTitle)
+        .toList();
+  }
+
   void _filterEmployeesByMonth(List<Employee> allEmployees) {
     _raiseFilteredEmployees = allEmployees.where((emp) {
       final nextRaiseDate = calculateNextRaiseDate(emp);
